@@ -1,6 +1,7 @@
 from flask import Flask, render_template_string, request, send_file
 import segno
 import io
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 app = Flask(__name__)
 
@@ -9,7 +10,7 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>QR Generator</title>
+<title>QR Generator with UTM</title>
 <style>
     body {
         font-family: Arial, sans-serif;
@@ -56,7 +57,17 @@ HTML_TEMPLATE = """
     button:hover {
         background-color: #e37a62;
     }
+    .utm-fields {
+        display: none;
+        margin-top: 15px;
+    }
 </style>
+<script>
+    function toggleUTMFields() {
+        const utmFields = document.getElementById('utm-fields');
+        utmFields.style.display = document.getElementById('enable-utm').checked ? 'block' : 'none';
+    }
+</script>
 </head>
 <body>
 <div class="container">
@@ -64,6 +75,19 @@ HTML_TEMPLATE = """
     <h2>QR Code Generator</h2>
     <form method="post">
         <input name="data" placeholder="Enter URL or text" required>
+        
+        <label style="display:block; margin-top:10px;">
+            <input type="checkbox" id="enable-utm" name="enable_utm" onclick="toggleUTMFields()"> Add/Edit UTM Parameters
+        </label>
+        
+        <div id="utm-fields" class="utm-fields">
+            <input name="utm_source" placeholder="utm_source">
+            <input name="utm_medium" placeholder="utm_medium">
+            <input name="utm_campaign" placeholder="utm_campaign">
+            <input name="utm_term" placeholder="utm_term">
+            <input name="utm_content" placeholder="utm_content">
+        </div>
+
         <select name="format">
             <option value="png">PNG</option>
             <option value="svg">SVG</option>
@@ -75,14 +99,42 @@ HTML_TEMPLATE = """
 </html>
 """
 
+def add_or_update_utm(url, utm_params):
+    """Append or update UTM params in a URL."""
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    
+    # Update with new UTM params if provided
+    for key, value in utm_params.items():
+        if value:
+            query[key] = [value]
+    
+    # Build new URL
+    new_query = urlencode(query, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
         data = request.form.get('data', '').strip()
         fmt = request.form.get('format', 'png')
+        enable_utm = request.form.get('enable_utm')
+
         if not data:
             return "Error: No data provided", 400
         
+        # If UTM is enabled, add/update params
+        if enable_utm:
+            utm_params = {
+                'utm_source': request.form.get('utm_source', '').strip(),
+                'utm_medium': request.form.get('utm_medium', '').strip(),
+                'utm_campaign': request.form.get('utm_campaign', '').strip(),
+                'utm_term': request.form.get('utm_term', '').strip(),
+                'utm_content': request.form.get('utm_content', '').strip(),
+            }
+            data = add_or_update_utm(data, utm_params)
+        
+        # Generate QR
         qr = segno.make(data, error='m')
         bio = io.BytesIO()
         
