@@ -21,6 +21,9 @@ HTML_TEMPLATE = """
         height: 100vh;
         margin: 0;
     }
+    #enable-utm{
+        width: 10%;
+    }
     .container {
         background: white;
         padding: 30px;
